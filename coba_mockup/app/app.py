@@ -85,7 +85,10 @@ DATA_MAHASISWA = {
     '122140236': {'nama': 'RAYHAN FADEL IRWANTO', 'nim': '122140236'},
     '122140239': {'nama': 'ROYFRAN ROGER VALENTINO', 'nim': '122140239'},
 }
-CONFIDENCE_THRESHOLD = 0.70 # Ambang batas keyakinan
+
+# --- KONFIGURASI THRESHOLD ---
+# Diubah menjadi 0.0 agar SEMUA hasil prediksi ditampilkan
+CONFIDENCE_THRESHOLD = 0.0 
 
 # --- B. Konfigurasi Halaman ---
 st.set_page_config(page_title="Kios Presensi AI (Upload)", layout="wide")
@@ -116,7 +119,7 @@ def process_uploaded_image(uploaded_file):
     for face in faces:
         x, y, w, h = face['box']
         
-        # Validasi koordinat (agar tidak error saat cropping)
+        # Validasi koordinat
         x, y = max(0, x), max(0, y)
         w, h = max(0, w), max(0, h)
         
@@ -140,30 +143,31 @@ def process_uploaded_image(uploaded_file):
                 detected_id = idx_to_class[idx.item()]
                 conf_val = conf.item()
                 
-                if conf_val >= CONFIDENCE_THRESHOLD:
-                    # Cek di Database Mahasiswa
-                    mhs = DATA_MAHASISWA.get(detected_id)
-                    if mhs:
-                        label_text = f"{mhs['nama']}"
-                        status_text = f"HADIR ({mhs['nim']})"
-                        box_color = (0, 255, 0) # Hijau (Mahasiswa Terdaftar)
-                        
-                        detection_results.append({
-                            "nama": mhs['nama'],
-                            "nim": mhs['nim'],
-                            "confidence": f"{conf_val*100:.1f}%",
-                            "status": "HADIR"
-                        })
-                    else:
-                        label_text = f"ID:{detected_id} (Data Tidak Ditemukan)"
-                        status_text = "DATA TIDAK LENGKAP"
-                        box_color = (255, 255, 0) # Kuning
-                else:
+                # --- LOGIKA BARU (Semua Ditampilkan) ---
+                mhs = DATA_MAHASISWA.get(detected_id)
+                
+                if mhs:
+                    label_text = f"{mhs['nama']}"
+                    # Tambahkan info confidence di visualisasi juga
+                    status_text = f"HADIR ({mhs['nim']})"
+                    box_color = (0, 255, 0) # Hijau
+                    
                     detection_results.append({
-                        "nama": "Tidak Dikenal",
-                        "nim": "-",
+                        "nama": mhs['nama'],
+                        "nim": mhs['nim'],
+                        "confidence": f"{conf_val*100:.1f}%", # Tampilkan nilai asli
+                        "status": "TERDETEKSI"
+                    })
+                else:
+                    label_text = f"ID:{detected_id} (?)"
+                    status_text = "DATA TIDAK LENGKAP"
+                    box_color = (255, 255, 0) # Kuning
+                    
+                    detection_results.append({
+                        "nama": "-",
+                        "nim": f"ID: {detected_id}",
                         "confidence": f"{conf_val*100:.1f}%",
-                        "status": "BUKAN MAHASISWA"
+                        "status": "DATA TIDAK LENGKAP"
                     })
 
         except Exception as e:
@@ -171,7 +175,9 @@ def process_uploaded_image(uploaded_file):
             
         # Gambar Kotak dan Label di Gambar Hasil
         cv2.rectangle(result_image, (x, y), (x+w, y+h), box_color, 3)
-        cv2.putText(result_image, label_text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, box_color, 2)
+        # Tampilkan nama dan confidence di gambar
+        label_display = f"{label_text} ({conf_val*100:.0f}%)"
+        cv2.putText(result_image, label_display, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
 
     return result_image, detection_results
 
@@ -221,14 +227,10 @@ with col_result:
                         st.markdown(f"**Nama:** {res['nama']}")
                         st.markdown(f"**NIM:** {res['nim']}")
                     with c2:
-                        if res['status'] == "HADIR":
-                            st.success(res['status'])
-                        else:
-                            st.error("DITOLAK")
-                    st.caption(f"Confidence: {res['confidence']}")
+                        st.info(f"Confidence: {res['confidence']}")
             
             # Tombol Simpan (Simulasi)
-            if any(r['status'] == 'HADIR' for r in results):
+            if results:
                 if st.button("💾 SIMPAN KE DATABASE", type="secondary", use_container_width=True):
                     st.toast("Data kehadiran berhasil disimpan!", icon="✅")
                     st.balloons()
