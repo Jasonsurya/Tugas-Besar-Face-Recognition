@@ -6,3 +6,4 @@ torch
 torchvision
 mtcnn
 timm
+tensorflow-cpu
